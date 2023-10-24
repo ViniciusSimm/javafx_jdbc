@@ -1,12 +1,19 @@
 package gui;
 
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.ResourceBundle;
 
+import db.DbException;
+import gui.listeners.DataChangeListener;
+import gui.utils.Alerts;
 import gui.utils.Constraints;
 import gui.utils.Utils;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -16,24 +23,31 @@ import model.services.DepartmentService;
 public class DepartmentFormController implements Initializable {
 
 	private Department entity;
-	
+
 	private DepartmentService service;
 
+	// List of objects to get notified when data change
+	private List<DataChangeListener> dataChangeListeners = new ArrayList<>();
+	
 	public void setDepartment(Department entity) {
 		this.entity = entity;
 	}
-	
+
 	public void updateFormData() {
 		if (entity == null) {
 			throw new IllegalStateException("Entity null");
 		}
-		
+
 		txtId.setText(String.valueOf(entity.getId()));
 		txtName.setText(entity.getName());
 	}
 
 	public void setDepartmentService(DepartmentService service) {
 		this.service = service;
+	}
+
+	public void subscribeDataChangeListener(DataChangeListener listener) {
+		dataChangeListeners.add(listener);
 	}
 	
 	@FXML
@@ -52,10 +66,38 @@ public class DepartmentFormController implements Initializable {
 	private Button btCancel;
 
 	@FXML
-	private void onBtSaveAction() {
-		entity = getFormData();
-		service.saveOrUpdate(entity);
-		
+	private void onBtSaveAction(ActionEvent event) {
+		if (entity == null) {
+			throw new IllegalStateException("Entity null");
+		}
+
+		if (service == null) {
+			throw new IllegalStateException("Service null");
+		}
+
+		try {
+			entity = getFormData();
+			service.saveOrUpdate(entity);
+			notifyDataChangeListeners();
+			Utils.currentStage(event).close();
+		} catch (DbException e) {
+			Alerts.showAlert("Error saving object", null, e.getMessage(), AlertType.ERROR);
+		}
+
+	}
+
+	private void notifyDataChangeListeners() {
+		for (DataChangeListener listener : dataChangeListeners) {
+			// Notify each item
+			listener.onDataChanged();
+		}		
+	}
+
+	@FXML
+	private void onBtCancelAction(ActionEvent event) {
+
+		Utils.currentStage(event).close();
+
 	}
 
 	private Department getFormData() {
@@ -63,11 +105,6 @@ public class DepartmentFormController implements Initializable {
 		obj.setId(Utils.tryParseToInt(txtId.getText()));
 		obj.setName(txtName.getText());
 		return obj;
-	}
-
-	@FXML
-	private void onBtCancelAction() {
-
 	}
 
 	@Override
